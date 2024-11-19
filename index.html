@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microsoft Sign-In</title>
+  <script src="https://alcdn.msauth.net/browser/2.32.0/js/msal-browser.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .button { background-color: #0078D4; color: white; padding: 10px 20px; border: none; cursor: pointer; }
+    .button:hover { background-color: #005A9E; }
+    pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+<h1>Microsoft Sign-In</h1>
+<button id="signIn" class="button">Sign In with Microsoft</button>
+<button id="callApi" class="button" disabled>Call API</button>
+<div id="response" style="margin-top: 20px;">
+  <h3>Response:</h3>
+  <pre id="responseContent"></pre>
+</div>
+
+<script>
+  // MSAL configuration
+  const msalConfig = {
+    auth: {
+      clientId: "2a1ff2b4-9792-44e0-8270-751aaae20a77",
+      authority: "https://login.microsoftonline.com/fe897583-acef-4059-921b-63d466f132b6",
+      redirectUri: "http://localhost:63342"
+    }
+  };
+
+  const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+  let isSigningIn = false;
+
+  // Sign-in function
+  async function signIn() {
+    if (isSigningIn) return;  // Prevent multiple sign-in attempts
+
+    isSigningIn = true;
+    try {
+      // Login Popup
+      const loginResponse = await msalInstance.loginPopup({
+        scopes: ["https://simuliuth.onmicrosoft.com/simple/read"] // Replace with your API scope
+      });
+
+      console.log("Login response:", loginResponse);
+
+      // Acquire Token Silently
+      await acquireToken();
+      document.getElementById("responseContent").innerText = "Sign-in successful!";
+    } catch (error) {
+      console.error("Error during login:", error);
+      document.getElementById("responseContent").innerText = "Sign-in failed. Check console for details.";
+    } finally {
+      isSigningIn = false;
+    }
+  }
+
+  // Acquire Token Silently
+  async function acquireToken() {
+    try {
+      const account = msalInstance.getActiveAccount();
+      if (account) {
+        const tokenResponse = await msalInstance.acquireTokenSilent({
+          account,
+          scopes: ["https://simuliuth.onmicrosoft.com/simple/read"] // Replace with your API scope
+        });
+
+        console.log("Access Token:", tokenResponse.accessToken);
+
+        // Store the access token in localStorage
+        localStorage.setItem("accessToken", tokenResponse.accessToken);
+
+        // Enable the Call API button
+        document.getElementById("callApi").disabled = false;
+      } else {
+        console.log("No active account found.");
+        document.getElementById("responseContent").innerText = "Please sign in first.";
+      }
+    } catch (error) {
+      console.error("Silent token acquisition failed:", error);
+      document.getElementById("responseContent").innerText = "Silent token acquisition failed. Check console for details.";
+    }
+  }
+
+  // Call API function
+  async function callApi() {
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      document.getElementById("responseContent").innerText = "Token not found. Please sign in first.";
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:5248/simple", { // Replace with your API endpoint
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      document.getElementById("responseContent").innerText = JSON.stringify(data, null, 2);
+    } catch (error) {
+      console.error("API call failed:", error);
+      document.getElementById("responseContent").innerText = "API call failed. Check console for details.";
+    }
+  }
+
+  // Event listeners
+  document.getElementById("signIn").addEventListener("click", signIn);
+  document.getElementById("callApi").addEventListener("click", callApi);
+</script>
+</body>
+</html>
